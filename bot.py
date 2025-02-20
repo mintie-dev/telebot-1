@@ -10,15 +10,38 @@ load_dotenv()
 
 # Enable logging
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
+    format='%(asctime)s - %(levelname)s\n'
+           'User: %(user)s\n'
+           'Chat: %(chat)s\n'
+           'Action: %(message)s\n'
+           '------------------------',
+    level=logging.INFO,
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[
+        logging.FileHandler('bot.log'),
+        logging.StreamHandler()
+    ]
 )
+
+logger = logging.getLogger(__name__)
 
 # Dictionary to store user data: {user_id: {'first_claim': datetime, 'claims_count': int, 'credits': int}}
 user_data = {}
 
+# Helper function to get user info for logging
+def get_user_info(update: Update):
+    user = update.effective_user
+    chat = update.effective_chat
+    return {
+        'user': f'{user.first_name} ({user.id})',
+        'chat': f'{chat.type}: {chat.title if chat.title else "Private"} ({chat.id})'
+    }
+
 # Command handlers
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    extra = get_user_info(update)
+    logger.info('Command: /start', extra=extra)
+    
     chat_type = update.message.chat.type
     if chat_type == 'private':
         await update.message.reply_text('Hello! I am your bot. Use /help to see what I can do.')
@@ -40,11 +63,13 @@ Available commands:
     await update.message.reply_text(help_text)
 
 async def dailyclaim_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    extra = get_user_info(update)
     user_id = update.effective_user.id
     current_time = datetime.now()
     
     # Initialize user data if not exists
     if user_id not in user_data:
+        logger.info('New user initialized', extra=extra)
         user_data[user_id] = {
             'first_claim': None,
             'last_period_claimed': None,
@@ -55,6 +80,7 @@ async def dailyclaim_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     # If this is their first ever claim
     if user['first_claim'] is None:
+        logger.info('First time claim', extra=extra)
         user['first_claim'] = current_time
         user['last_period_claimed'] = 0  # Period 0 is claimed
         user['credits'] += 30
@@ -68,6 +94,7 @@ async def dailyclaim_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     # Check if user has claimed during this period
     if user['last_period_claimed'] == current_period:
+        logger.info('Attempted to claim too early', extra=extra)
         # Calculate time until next period
         next_period_start = user['first_claim'] + timedelta(days=current_period + 1)
         time_left = next_period_start - current_time
@@ -79,6 +106,7 @@ async def dailyclaim_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     
     # Give credits and update last claimed period
+    logger.info(f'Successful claim. New balance: {user["credits"] + 30}', extra=extra)
     user['credits'] += 30
     user['last_period_claimed'] = current_period
     
