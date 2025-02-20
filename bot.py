@@ -2,6 +2,11 @@ import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+import os
+
+# Load environment variables
+load_dotenv()
 
 # Enable logging
 logging.basicConfig(
@@ -103,8 +108,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f'You said: {text}')
 
 def main():
-    # Replace 'YOUR_BOT_TOKEN' with the token from BotFather
-    app = Application.builder().token('7616057580:AAEzib6qk6YEpegh8iRNhLWGKpDD48vItOk').build()
+    # Use token from environment variable
+    app = Application.builder().token(os.getenv('BOT_TOKEN')).build()
 
     # Add command handlers
     app.add_handler(CommandHandler('start', start_command))
