@@ -4,9 +4,13 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
+from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
+
+# Initialize OpenAI client
+client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 # Enable logging
 logging.basicConfig(
@@ -56,6 +60,7 @@ Available commands:
 /help - Show this help message
 /dailyclaim - Claim daily credits!
 /credits - Check your credit balance
+/chat [prompt] - Chat! Erm... try it duh
 '''
     if chat_type != 'private':
         help_text += '\nTip: You can also message me privately to avoid group chat clutter!'
@@ -128,6 +133,42 @@ async def credits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     credits = user_data[user_id]['credits']
     await update.message.reply_text(f"Your current balance is: {credits} credits")
 
+async def chat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    extra = get_user_info(update)
+    logger.info('Command: /chat', extra=extra)
+    
+    # Get the prompt from the message
+    message_text = update.message.text
+    if len(message_text.split(' ', 1)) < 2:
+        await update.message.reply_text('Please provide a prompt after /chat')
+        return
+        
+    prompt = message_text.split(' ', 1)[1]
+    
+    try:
+        # Send typing action
+        await update.message.chat.send_action('typing')
+        
+        # Call OpenAI API
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a witty and sarcastic assistant. Your responses should be humorous, clever, and include a touch of playful sarcasm while still being helpful and friendly. Avoid being mean-spirited."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=500
+        )
+        
+        # Get the response text
+        reply = response.choices[0].message.content
+        
+        await update.message.reply_text(reply)
+        logger.info('Chat response sent successfully', extra=extra)
+    except Exception as e:
+        error_message = f"Sorry, I couldn't process that request. Error: {str(e)}"
+        await update.message.reply_text(error_message)
+        logger.error(f'Error in chat command: {str(e)}', extra=extra)
+
 # Message handler
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Only respond to direct messages, not group messages without commands
@@ -144,6 +185,7 @@ def main():
     app.add_handler(CommandHandler('help', help_command))
     app.add_handler(CommandHandler('dailyclaim', dailyclaim_command))
     app.add_handler(CommandHandler('credits', credits_command))
+    app.add_handler(CommandHandler('chat', chat_command))
     # Add message handler
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
